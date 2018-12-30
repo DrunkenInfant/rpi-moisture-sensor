@@ -1,0 +1,10 @@
+[package]
+name = "rpi-moisture-sensor"
+version = "0.1.0"
+authors = ["Oscar Olsson <osse.olsson@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+register = "^0.3.2"
+memmap = "^0.7.0"
+time = "^0.1.41"
