@@ -28,3 +28,7 @@ linker = "arm-linux-gnueabihf-gcc-7"
 EOF
 
 ```
+
+## Resources
+
+ * Registry manipulation: https://github.com/tock/tock/tree/master/libraries/tock-register-interface.
