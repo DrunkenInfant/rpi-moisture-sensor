@@ -21,6 +21,12 @@ fn u32_to_bytes(x:u32) -> [u8;4] {
 
 fn main() {
     let teardown = Arc::new(AtomicBool::new(false));
+
+    let signal_teardown = teardown.clone();
+	ctrlc::set_handler(move || {
+        signal_teardown.store(true, Ordering::SeqCst);
+    }).expect("Error setting SIGINT handler");
+
     let mut gp = gpio::Gpio::new().unwrap();
     let mut moist = moist_sensor::MoistSensor::new(PWR_PIN, VAL_PIN, &mut gp);
     moist.init().unwrap();
