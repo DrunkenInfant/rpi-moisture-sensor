@@ -7,4 +7,4 @@ fi
 
 cargo build --target=armv7-unknown-linux-gnueabihf &&
   scp target/armv7-unknown-linux-gnueabihf/debug/rpi-moisture-sensor "$RPI_HOST": &&
-  ssh "$RPI_HOST" 'RUST_BACKTRACE=1 ./rpi-moisture-sensor'
+  ssh "$RPI_HOST" 'RUST_BACKTRACE=1 ./rpi-moisture-sensor --pwr 27 --val 17'
