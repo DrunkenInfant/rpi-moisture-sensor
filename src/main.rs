@@ -1,5 +1,6 @@
 use std::io::{Write, ErrorKind};
 use std::os::unix::net::UnixListener;
+use std::sync::{Arc, atomic::AtomicBool, atomic::Ordering};
 use std::time::Duration;
 
 pub mod gpio;
@@ -19,6 +20,7 @@ fn u32_to_bytes(x:u32) -> [u8;4] {
 }
 
 fn main() {
+    let teardown = Arc::new(AtomicBool::new(false));
     let mut gp = gpio::Gpio::new().unwrap();
     let mut moist = moist_sensor::MoistSensor::new(PWR_PIN, VAL_PIN, &mut gp);
     moist.init().unwrap();
@@ -27,10 +29,11 @@ fn main() {
     // Success is not important here
     let _ = std::fs::remove_file(path);
     let listener = UnixListener::bind(SOCKET_PATH).unwrap();
+    listener.set_nonblocking(true).unwrap();
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut stream) => {
+    while !teardown.load(Ordering::SeqCst) {
+        match listener.accept() {
+            Ok((mut stream, _addr)) => {
                 loop {
                     match stream.write_all(&u32_to_bytes(moist.read().unwrap())) {
                         Ok(()) => std::thread::sleep(Duration::from_secs(MOIST_INTERVALL)),
@@ -47,10 +50,16 @@ fn main() {
                 }
             },
             Err(err) => {
-                println!("Socket accept error: {}", err);
-                break;
+                match err.kind() {
+                    ErrorKind::WouldBlock => {},
+                    _ => {
+                        println!("Socket accept error: {}", err);
+                        break;
+                    }
+                }
             }
         }
+        std::thread::sleep(Duration::from_secs(1));
     }
 
     std::fs::remove_file(path).unwrap();
