@@ -1,19 +1,9 @@
-use std::io::{Write, ErrorKind};
-use std::os::unix::net::UnixListener;
 use std::sync::{Arc, atomic::AtomicBool, atomic::Ordering};
-use std::time::Duration;
 use clap::{Arg, App};
 
 pub mod gpio;
 pub mod moist_sensor;
-
-fn u32_to_bytes(x:u32) -> [u8;4] {
-    let b1 : u8 = ((x >> 24) & 0xff) as u8;
-    let b2 : u8 = ((x >> 16) & 0xff) as u8;
-    let b3 : u8 = ((x >> 8) & 0xff) as u8;
-    let b4 : u8 = (x & 0xff) as u8;
-    return [b1, b2, b3, b4]
-}
+pub mod socket_publisher;
 
 fn main() {
     let cmd = App::new("Moist sensor server")
@@ -78,42 +68,7 @@ fn main() {
     let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
     moist.init(&mut gp).unwrap();
 
-    let path = std::path::Path::new(socket_path);
-    // Success is not important here
-    let _ = std::fs::remove_file(path);
-    let listener = UnixListener::bind(socket_path).unwrap();
-    listener.set_nonblocking(true).unwrap();
+    socket_publisher::run(teardown.clone(), &socket_path, sensor_interval, &moist, &mut gp).unwrap();
 
-    while !teardown.load(Ordering::SeqCst) {
-        match listener.accept() {
-            Ok((mut stream, _addr)) => {
-                loop {
-                    match stream.write_all(&u32_to_bytes(moist.read(&mut gp).unwrap())) {
-                        Ok(()) => std::thread::sleep(Duration::from_secs(sensor_interval)),
-                        Err(err) => {
-                            match err.kind() {
-                                ErrorKind::BrokenPipe => break,
-                                _ => {
-                                    println!("Socket write error: {}", err);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            Err(err) => {
-                match err.kind() {
-                    ErrorKind::WouldBlock => {},
-                    _ => {
-                        println!("Socket accept error: {}", err);
-                        break;
-                    }
-                }
-            }
-        }
-        std::thread::sleep(Duration::from_secs(1));
-    }
-
-    std::fs::remove_file(path).unwrap();
+    moist.clear(&mut gp).unwrap();
 }
