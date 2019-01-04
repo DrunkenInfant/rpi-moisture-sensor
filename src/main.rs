@@ -51,8 +51,17 @@ fn main() {
              .takes_value(true)
              .default_value("1")
          )
+        .arg(Arg::with_name("gpio")
+             .long("gpio")
+             .value_name("PATH")
+             .help("Path GPIO device or simulation file")
+             .required(false)
+             .takes_value(true)
+             .default_value("/dev/gpiomem")
+         )
         .get_matches();
 
+    let gpio_path = cmd.value_of("gpio").unwrap();
     let val_pin = u8::from_str_radix(cmd.value_of("val").unwrap(), 10).unwrap();
     let pwr_pin = u8::from_str_radix(cmd.value_of("pwr").unwrap(), 10).unwrap();
     let socket_path = cmd.value_of("socket").unwrap();
@@ -65,7 +74,7 @@ fn main() {
         signal_teardown.store(true, Ordering::SeqCst);
     }).expect("Error setting SIGINT handler");
 
-    let mut gp = gpio::Gpio::new().unwrap();
+    let mut gp = gpio::Gpio::new(&gpio_path).unwrap();
     let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
     moist.init(&mut gp).unwrap();
 

@@ -86,11 +86,11 @@ impl Drop for Gpio {
 }
 
 impl Gpio {
-    pub fn new() -> Result<Gpio, io::Error> {
+    pub fn new(gpiomem: &str) -> Result<Gpio, io::Error> {
         let gpio_file = OpenOptions::new()
             .read(true)
             .write(true)
-            .open("/dev/gpiomem")?;
+            .open(gpiomem)?;
 
         let mmap = unsafe { MmapOptions::new().len(registers::GPIO_MEM_SIZE).map_mut(&gpio_file)? };
 
