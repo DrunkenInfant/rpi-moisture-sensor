@@ -2,6 +2,11 @@
 
 Server exposing soil moisture samples.
 
+## TODO
+
+ * Improve sample timing to avoid drift.
+ * Handle multiple sensors.
+
 ## Cross compile
 
 ```sh
