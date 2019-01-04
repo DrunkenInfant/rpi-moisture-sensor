@@ -1,45 +1,42 @@
 use std::time::Duration;
 use crate::gpio::{Gpio, Mode, Level, PullUpDown, Error}; // as GpioError}
 
-pub struct MoistSensor<'a> {
+pub struct MoistSensor {
     pwr_pin: u8,
-    val_pin: u8,
-    gpio: &'a mut Gpio
+    val_pin: u8
 }
 
-impl<'a> Drop for MoistSensor<'a> {
-    fn drop(&mut self) {
-        let _ = self.gpio.clear(self.pwr_pin);
-        let _ = self.gpio.set_mode(self.val_pin, Mode::Input);
-        let _ = self.gpio.set_mode(self.pwr_pin, Mode::Input);
-    }
-}
-
-impl<'a> MoistSensor<'a> {
-    pub fn new(pwr_pin: u8, val_pin: u8, gpio: &mut Gpio) -> MoistSensor {
+impl MoistSensor {
+    pub fn new(pwr_pin: u8, val_pin: u8) -> MoistSensor {
         MoistSensor {
             pwr_pin,
-            val_pin,
-            gpio
+            val_pin
         }
     }
 
-    pub fn init(&mut self) -> Result<(), Error> {
-        self.gpio.set_mode(self.val_pin, Mode::Input).unwrap();
-        self.gpio.set_mode(self.pwr_pin, Mode::Output).unwrap();
-        self.gpio.set_pullupdown(&[self.val_pin], PullUpDown::Up).unwrap();
-        self.gpio.set_pullupdown(&[self.pwr_pin], PullUpDown::Off).unwrap();
+    pub fn init(&self, gpio: &mut Gpio) -> Result<(), Error> {
+        gpio.set_mode(self.val_pin, Mode::Input).unwrap();
+        gpio.set_mode(self.pwr_pin, Mode::Output).unwrap();
+        gpio.set_pullupdown(&[self.val_pin], PullUpDown::Up).unwrap();
+        gpio.set_pullupdown(&[self.pwr_pin], PullUpDown::Off).unwrap();
         Ok(())
     }
 
-    pub fn read(&mut self) -> Result<u32, Error> {
-        self.gpio.set(self.pwr_pin)?;
+    pub fn clear(&self, gpio: &mut Gpio) -> Result<(), Error> {
+        let _ = gpio.clear(self.pwr_pin)?;
+        let _ = gpio.set_mode(self.val_pin, Mode::Input)?;
+        let _ = gpio.set_mode(self.pwr_pin, Mode::Input)?;
+        Ok(())
+    }
+
+    pub fn read(&self, gpio: &mut Gpio) -> Result<u32, Error> {
+        gpio.set(self.pwr_pin)?;
         std::thread::sleep(Duration::from_millis(2));
-        let res = match self.gpio.read(self.val_pin)? {
+        let res = match gpio.read(self.val_pin)? {
             Level::High => 1,
             Level::Low => 0
         };
-        self.gpio.clear(self.pwr_pin)?;
+        gpio.clear(self.pwr_pin)?;
         Ok(res)
     }
 }

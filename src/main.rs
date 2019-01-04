@@ -66,8 +66,8 @@ fn main() {
     }).expect("Error setting SIGINT handler");
 
     let mut gp = gpio::Gpio::new().unwrap();
-    let mut moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin, &mut gp);
-    moist.init().unwrap();
+    let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
+    moist.init(&mut gp).unwrap();
 
     let path = std::path::Path::new(socket_path);
     // Success is not important here
@@ -79,7 +79,7 @@ fn main() {
         match listener.accept() {
             Ok((mut stream, _addr)) => {
                 loop {
-                    match stream.write_all(&u32_to_bytes(moist.read().unwrap())) {
+                    match stream.write_all(&u32_to_bytes(moist.read(&mut gp).unwrap())) {
                         Ok(()) => std::thread::sleep(Duration::from_secs(sensor_interval)),
                         Err(err) => {
                             match err.kind() {
