@@ -1,9 +1,12 @@
-use std::sync::{Arc, atomic::AtomicBool, atomic::Ordering};
-use clap::{Arg, App};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use clap::{Arg, App, SubCommand};
+use tokio::runtime::Runtime;
 
 pub mod gpio;
 pub mod moist_sensor;
 pub mod socket_publisher;
+pub mod rabbitmq_publisher;
 
 fn main() {
     let cmd = App::new("Moist sensor server")
@@ -23,15 +26,6 @@ fn main() {
              .required(true)
              .takes_value(true)
          )
-        .arg(Arg::with_name("socket")
-             .short("s")
-             .long("socket")
-             .value_name("PATH")
-             .help("The path to the created unix socket")
-             .required(false)
-             .takes_value(true)
-             .default_value("./moisture.sock")
-         )
         .arg(Arg::with_name("interval")
              .short("i")
              .long("interval")
@@ -49,12 +43,42 @@ fn main() {
              .takes_value(true)
              .default_value("/dev/gpiomem")
          )
+        .subcommand(SubCommand::with_name("socket")
+            .about("Publish sensor values on unix socket")
+            .arg(Arg::with_name("path")
+                 .short("p")
+                 .long("path")
+                 .value_name("PATH")
+                 .help("The path to the created unix socket")
+                 .required(false)
+                 .takes_value(true)
+                 .default_value("./moisture.sock")
+             )
+        )
+        .subcommand(SubCommand::with_name("rabbitmq")
+            .about("Publish sensor values on rabbitmq")
+            .arg(Arg::with_name("host")
+                 .long("host")
+                 .short("h")
+                 .value_name("HOST")
+                 .help("Host and port of rabbitmq server, eg 127.0.0.1:5672")
+                 .required(true)
+                 .takes_value(true)
+             )
+            .arg(Arg::with_name("exchange")
+                 .long("exchange")
+                 .short("e")
+                 .value_name("EXCHANGE")
+                 .help("Name of the rabbitmq exchange to publish to")
+                 .required(true)
+                 .takes_value(true)
+             )
+        )
         .get_matches();
 
     let gpio_path = cmd.value_of("gpio").unwrap();
     let val_pin = u8::from_str_radix(cmd.value_of("val").unwrap(), 10).unwrap();
     let pwr_pin = u8::from_str_radix(cmd.value_of("pwr").unwrap(), 10).unwrap();
-    let socket_path = cmd.value_of("socket").unwrap();
     let sensor_interval = u64::from_str_radix(cmd.value_of("interval").unwrap(), 10).unwrap();
 
     let teardown = Arc::new(AtomicBool::new(false));
@@ -64,11 +88,34 @@ fn main() {
         signal_teardown.store(true, Ordering::SeqCst);
     }).expect("Error setting SIGINT handler");
 
-    let mut gp = gpio::Gpio::new(&gpio_path).unwrap();
+    let gp = Arc::new(Mutex::new(gpio::Gpio::new(&gpio_path).unwrap()));
     let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
-    moist.init(&mut gp).unwrap();
+    { moist.init(&mut gp.lock().unwrap()).unwrap() };
 
-    socket_publisher::run(teardown.clone(), &socket_path, sensor_interval, &moist, &mut gp).unwrap();
+    match cmd.subcommand() {
+        ("rabbitmq", Some(rmq_cmd)) => {
+            Runtime::new().unwrap().block_on_all(
+                rabbitmq_publisher::run(
+                    &teardown.clone(),
+                    rmq_cmd.value_of("host").unwrap(),
+                    rmq_cmd.value_of("exchange").unwrap(),
+                    sensor_interval,
+                    moist.clone(),
+                    gp.clone()
+                )
+            ).expect("runtime exited with error");
+        },
+        ("socket", Some(socket_cmd)) => {
+            socket_publisher::run(
+                teardown.clone(),
+                socket_cmd.value_of("socket").unwrap(),
+                sensor_interval,
+                moist.clone(),
+                gp.clone()
+            ).unwrap();
+        }
+        (&_, _) => println!("{}", cmd.usage())
+    };
 
-    moist.clear(&mut gp).unwrap();
+    { moist.clear(&mut gp.lock().unwrap()).unwrap() };
 }

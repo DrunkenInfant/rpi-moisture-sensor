@@ -1,6 +1,7 @@
 use std::time::Duration;
 use crate::gpio::{Gpio, Mode, Level, PullUpDown, Error}; // as GpioError}
 
+#[derive(Clone, Copy)]
 pub struct MoistSensor {
     pwr_pin: u8,
     val_pin: u8
