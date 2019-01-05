@@ -1,9 +1,8 @@
 use std::ops::Add;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use failure::Error;
-use futures::future::{Future, Loop};
+use futures::future::{Shared, Future, Loop};
 use tokio::net::TcpStream;
 use tokio::timer::Delay;
 use lapin_futures::client::ConnectionOptions;
@@ -20,15 +19,15 @@ fn u32_to_bytes(x:u32) -> [u8;4] {
     return [b1, b2, b3, b4]
 }
 
-pub fn run(
-        teardown: &Arc<AtomicBool>,
+pub fn run<F>(
+        teardown: Shared<F>,
         addr: &str,
         exchange: &str,
         sensor_interval: u64,
         moist: MoistSensor,
-        gp: Arc<Mutex<Gpio>>) -> Box<Future<Item = u64, Error = Error> + Send> {
-    let sexchange = exchange.to_string();
-    let steardown = teardown.clone();
+        gp: Arc<Mutex<Gpio>>) -> Box<Future<Item = u64, Error = Error> + Send> where F: Future<Item = Option<i32>, Error = std::io::Error> + Send + 'static {
+    let exchange = exchange.to_string();
+    let teardown = teardown.clone();
 
     let fut = TcpStream::connect(&addr.parse().unwrap()).map_err(Error::from).and_then(|stream| {
         lapin_futures::client::Client::connect(stream, ConnectionOptions {
@@ -39,11 +38,11 @@ pub fn run(
         client.create_channel().map_err(Error::from)
     }).and_then(move |channel| {
         futures::future::loop_fn(0_u64, move |count| {
-            let steardown = steardown.clone();
+            let teardown = teardown.clone();
             let val = { moist.read(&mut gp.lock().unwrap()).unwrap() };
             channel
                 .basic_publish(
-                    &sexchange,
+                    &exchange,
                     "sensor",
                     u32_to_bytes(val).to_vec(),
                     BasicPublishOptions::default(),
@@ -51,14 +50,19 @@ pub fn run(
                 )
                 .map_err(Error::from)
                 .and_then(move |_| {
-                    Delay::new(Instant::now().add(Duration::from_secs(sensor_interval)))
-                        .map_err(Error::from)
+                    let delay = Delay::new(Instant::now().add(Duration::from_secs(sensor_interval)))
+                        .map(|_| None)
+                        .map_err(Error::from);
+                    teardown
+                        .then(|_| -> Result<Option<()>, Error> { Ok(Some(())) })
+                        .select(delay)
+                        .map(|(v, _)| v)
+                        .map_err(|(e, _)| e)
                 })
-                .and_then(move |_| {
-                    if steardown.load(Ordering::SeqCst) {
-                        Ok(Loop::Break(count + 1))
-                    } else {
-                        Ok(Loop::Continue(count + 1))
+                .and_then(move |res: Option<()>| -> Result<Loop<u64, u64>, Error> {
+                    match res {
+                        Some(_) => Ok(Loop::Break(count + 1)),
+                        None => Ok(Loop::Continue(count + 1))
                     }
                 })
         })

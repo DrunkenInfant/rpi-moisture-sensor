@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use clap::{Arg, App, SubCommand};
+use futures::{Future, Stream};
 use tokio::runtime::Runtime;
+use tokio_signal::unix::{Signal, SIGINT, SIGTERM};
 
 pub mod gpio;
 pub mod moist_sensor;
@@ -81,22 +83,20 @@ fn main() {
     let pwr_pin = u8::from_str_radix(cmd.value_of("pwr").unwrap(), 10).unwrap();
     let sensor_interval = u64::from_str_radix(cmd.value_of("interval").unwrap(), 10).unwrap();
 
-    let teardown = Arc::new(AtomicBool::new(false));
-
-    let signal_teardown = teardown.clone();
-	ctrlc::set_handler(move || {
-        signal_teardown.store(true, Ordering::SeqCst);
-    }).expect("Error setting SIGINT handler");
-
     let gp = Arc::new(Mutex::new(gpio::Gpio::new(&gpio_path).unwrap()));
     let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
     { moist.init(&mut gp.lock().unwrap()).unwrap() };
 
     match cmd.subcommand() {
         ("rabbitmq", Some(rmq_cmd)) => {
+            let int = Signal::new(SIGINT).flatten_stream().into_future();
+            let term = Signal::new(SIGTERM).flatten_stream().into_future();
+            let sigf = int.select(term)
+                .map(|((v, _), _)| v)
+                .map_err(|((err, _), _)| err);
             Runtime::new().unwrap().block_on_all(
                 rabbitmq_publisher::run(
-                    &teardown.clone(),
+                    sigf.shared(),
                     rmq_cmd.value_of("host").unwrap(),
                     rmq_cmd.value_of("exchange").unwrap(),
                     sensor_interval,
@@ -106,6 +106,11 @@ fn main() {
             ).expect("runtime exited with error");
         },
         ("socket", Some(socket_cmd)) => {
+            let teardown = Arc::new(AtomicBool::new(false));
+            let signal_teardown = teardown.clone();
+            ctrlc::set_handler(move || {
+                signal_teardown.store(true, Ordering::SeqCst);
+            }).expect("Error setting SIGINT handler");
             socket_publisher::run(
                 teardown.clone(),
                 socket_cmd.value_of("socket").unwrap(),
