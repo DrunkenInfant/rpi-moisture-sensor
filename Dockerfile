@@ -13,7 +13,7 @@ RUN mkdir -p .cargo
 ADD docker/cargo.config .cargo/config
 ADD src ./src
 
-RUN cargo build --target=armv7-unknown-linux-gnueabihf --release
+RUN CC=arm-linux-gnueabihf-gcc-6 cargo build --target=armv7-unknown-linux-gnueabihf --release
 
 FROM arm32v7/debian:stable-slim
 
