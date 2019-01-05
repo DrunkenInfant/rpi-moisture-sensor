@@ -1,4 +1,5 @@
 use std::net::ToSocketAddrs;
+use std::time::{SystemTime, UNIX_EPOCH};
 use failure::Error;
 use futures::future::{Shared, Future};
 use futures::stream::{Stream};
@@ -36,6 +37,9 @@ pub fn run<F, S>(
                         sample,
                         BasicPublishOptions::default(),
                         BasicProperties::default()
+                            .with_content_type("application/json".to_string())
+                            .with_delivery_mode(2)
+                            .with_timestamp(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64)
                     )
                     .map(|_| ())
                     .map_err(Error::from)
