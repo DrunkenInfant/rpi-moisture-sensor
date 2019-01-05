@@ -1,19 +1,10 @@
 use std::net::ToSocketAddrs;
-use std::time::SystemTime;
 use failure::Error;
 use futures::future::{Shared, Future};
 use futures::stream::{Stream};
 use tokio::net::TcpStream;
 use lapin_futures::client::ConnectionOptions;
 use lapin_futures::channel::{BasicPublishOptions, BasicProperties};
-
-fn u32_to_bytes(x:u32) -> [u8;4] {
-    let b1 : u8 = ((x >> 24) & 0xff) as u8;
-    let b2 : u8 = ((x >> 16) & 0xff) as u8;
-    let b3 : u8 = ((x >> 8) & 0xff) as u8;
-    let b4 : u8 = (x & 0xff) as u8;
-    return [b1, b2, b3, b4]
-}
 
 pub fn run<F, S>(
         teardown: Shared<F>,
@@ -22,7 +13,7 @@ pub fn run<F, S>(
         sample_stream: S
     ) -> Box<Future<Item = (), Error = Error> + Send>
         where F: Future<Item = Option<i32>, Error = std::io::Error> + Send + 'static,
-              S: Stream<Item = (SystemTime, u32), Error = Error> + Send + 'static {
+              S: Stream<Item = Vec<u8>, Error = Error> + Send + 'static {
     let exchange = exchange.to_string();
     let teardown = teardown.clone();
 
@@ -37,12 +28,12 @@ pub fn run<F, S>(
         let teardown = teardown
             .then(|_| -> Result<(), Error> { Ok(()) });
         let stream = sample_stream
-            .for_each(move |(_timestamp, sample)| {
+            .for_each(move |sample| {
                 channel
                     .basic_publish(
                         &exchange,
                         "sensor",
-                        u32_to_bytes(sample).to_vec(),
+                        sample,
                         BasicPublishOptions::default(),
                         BasicProperties::default()
                     )

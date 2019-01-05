@@ -7,6 +7,7 @@ use tokio_signal::unix::{Signal, SIGINT, SIGTERM};
 
 pub mod gpio;
 pub mod moist_sensor;
+pub mod sample_formatter;
 pub mod sensor;
 pub mod sensor_sampler;
 pub mod socket_publisher;
@@ -89,7 +90,9 @@ fn main() {
     let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
     { moist.init(&mut gp.lock().unwrap()).unwrap() };
 
+    let moist_formatter = sample_formatter::SampleFormatter::new("moisture1".to_string(), "soil_moisture".to_string());
     let sampler = sensor_sampler::SensorSampler::new(moist, gp.clone(), sensor_interval)
+        .map(move |sample| moist_formatter.format(&sample))
         .map_err(failure::Error::from);
 
     match cmd.subcommand() {
