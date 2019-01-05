@@ -72,6 +72,15 @@ pub struct Error {
     pin: u8
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "Gpio error with pin ({})", self.pin)
+    }
+}
+
+impl std::error::Error for Error {
+}
+
 pub fn validate_pin(pin: u8) -> Result<(), Error> {
     if pin > 54 {
         return Err(Error { pin })

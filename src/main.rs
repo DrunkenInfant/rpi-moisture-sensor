@@ -7,6 +7,8 @@ use tokio_signal::unix::{Signal, SIGINT, SIGTERM};
 
 pub mod gpio;
 pub mod moist_sensor;
+pub mod sensor;
+pub mod sensor_sampler;
 pub mod socket_publisher;
 pub mod rabbitmq_publisher;
 
@@ -87,6 +89,9 @@ fn main() {
     let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
     { moist.init(&mut gp.lock().unwrap()).unwrap() };
 
+    let sampler = sensor_sampler::SensorSampler::new(moist, gp.clone(), sensor_interval)
+        .map_err(failure::Error::from);
+
     match cmd.subcommand() {
         ("rabbitmq", Some(rmq_cmd)) => {
             let int = Signal::new(SIGINT).flatten_stream().into_future();
@@ -99,9 +104,7 @@ fn main() {
                     sigf.shared(),
                     rmq_cmd.value_of("host").unwrap(),
                     rmq_cmd.value_of("exchange").unwrap(),
-                    sensor_interval,
-                    moist.clone(),
-                    gp.clone()
+                    sampler
                 )
             ).expect("runtime exited with error");
         },

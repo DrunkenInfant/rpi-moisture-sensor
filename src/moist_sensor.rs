@@ -1,10 +1,28 @@
 use std::time::Duration;
 use crate::gpio::{Gpio, Mode, Level, PullUpDown, Error}; // as GpioError}
+use crate::sensor::Sensor;
 
 #[derive(Clone, Copy)]
 pub struct MoistSensor {
     pwr_pin: u8,
     val_pin: u8
+}
+
+impl Sensor for MoistSensor {
+    type Value = u32;
+    type Error = Error;
+
+    fn init(&self, gpio: &mut Gpio) -> Result<(), Error> {
+        self.init(gpio)
+    }
+
+    fn read(&self, gpio: &mut Gpio) -> Result<Self::Value, Self::Error> {
+        self.read(gpio)
+    }
+
+    fn clear(&self, gpio: &mut Gpio) -> Result<(), Error> {
+        self.clear(gpio)
+    }
 }
 
 impl MoistSensor {
