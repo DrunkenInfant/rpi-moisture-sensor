@@ -11,13 +11,12 @@ impl SampleFormatter {
     }
 
     pub fn format(&self, (timestamp, sample): &(SystemTime, u32)) -> Vec<u8> {
-        let msg = format!(
-            "{}:{}:{}:{}",
-            self.sample_type,
-            self.sensor_id,
-            timestamp.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis(),
-            sample
-        );
-        msg.as_bytes().to_vec()
+        let json = json!({
+            "sensor_type": self.sample_type,
+            "sensor_id": self.sensor_id,
+            "timestamp": timestamp.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as u64,
+            "value": sample
+        });
+        serde_json::to_vec(&json).unwrap()
     }
 }

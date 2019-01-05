@@ -1,3 +1,4 @@
+#[macro_use] extern crate serde_json;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use clap::{Arg, App, SubCommand};
