@@ -16,6 +16,13 @@ pub mod rabbitmq_publisher;
 
 fn main() {
     let cmd = App::new("Moist sensor server")
+        .arg(Arg::with_name("id")
+             .long("id")
+             .value_name("SENSOR_ID")
+             .help("The id of the sensor")
+             .required(true)
+             .takes_value(true)
+         )
         .arg(Arg::with_name("val")
              .long("val")
              .value_name("BCMPIN")
@@ -83,6 +90,7 @@ fn main() {
         .get_matches();
 
     let gpio_path = cmd.value_of("gpio").unwrap();
+    let sensor_id = cmd.value_of("id").unwrap();
     let val_pin = u8::from_str_radix(cmd.value_of("val").unwrap(), 10).unwrap();
     let pwr_pin = u8::from_str_radix(cmd.value_of("pwr").unwrap(), 10).unwrap();
     let sensor_interval = u64::from_str_radix(cmd.value_of("interval").unwrap(), 10).unwrap();
@@ -91,7 +99,7 @@ fn main() {
     let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
     { moist.init(&mut gp.lock().unwrap()).unwrap() };
 
-    let moist_formatter = sample_formatter::SampleFormatter::new("moisture1".to_string(), "soil_moisture".to_string());
+    let moist_formatter = sample_formatter::SampleFormatter::new(sensor_id.to_string(), "soil_moisture".to_string());
     let sampler = sensor_sampler::SensorSampler::new(moist, gp.clone(), sensor_interval)
         .map(move |sample| moist_formatter.format(&sample))
         .map_err(failure::Error::from);
