@@ -34,6 +34,14 @@ EOF
 
 ```
 
+## Racer navigation
+
+```
+cargo +nightly install racer
+rustup component add rust-src
+export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
+```
+
 ## Resources
 
  * Registry manipulation: https://github.com/tock/tock/tree/master/libraries/tock-register-interface.
