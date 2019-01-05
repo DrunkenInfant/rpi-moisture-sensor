@@ -1,4 +1,5 @@
 use std::ops::Add;
+use std::net::ToSocketAddrs;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use failure::Error;
@@ -29,7 +30,7 @@ pub fn run<F>(
     let exchange = exchange.to_string();
     let teardown = teardown.clone();
 
-    let fut = TcpStream::connect(&addr.parse().unwrap()).map_err(Error::from).and_then(|stream| {
+    let fut = TcpStream::connect(&addr.to_socket_addrs().unwrap().next().unwrap()).map_err(Error::from).and_then(|stream| {
         lapin_futures::client::Client::connect(stream, ConnectionOptions {
             frame_max: 65535,
             ..Default::default()
