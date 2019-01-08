@@ -1,0 +1,4 @@
+[sensors]
+moist1.sensor_type = 'moist_sensor'
+moist1.pwr_pin = 17
+moist1.val_pin = 27

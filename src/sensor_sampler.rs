@@ -3,7 +3,7 @@ use std::time::{Duration, Instant, SystemTime};
 use futures::{Async, Poll};
 use futures::stream::Stream;
 use tokio_timer::Interval;
-use crate::gpio::Gpio;
+use crate::gpio::{Gpio, Error as GpioError};
 use crate::sensor::Sensor;
 
 pub struct SensorSampler<S: Sensor> {
@@ -26,8 +26,8 @@ impl<S: Sensor> SensorSampler<S> {
 }
 
 impl<S: Sensor> Stream for SensorSampler<S> {
-    type Item = (SystemTime, S::Value);
-    type Error = S::Error;
+    type Item = (SystemTime, u32);
+    type Error = GpioError;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         // TODO handler errors instead of unwrap

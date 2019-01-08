@@ -10,32 +10,19 @@ pub mod gpio;
 pub mod moist_sensor;
 pub mod sample_formatter;
 pub mod sensor;
+pub mod sensor_config;
 pub mod sensor_sampler;
 pub mod socket_publisher;
 pub mod rabbitmq_publisher;
 
+use crate::sensor::Sensor;
+
 fn main() {
     let cmd = App::new("Moist sensor server")
-        .arg(Arg::with_name("id")
-             .long("id")
-             .value_name("SENSOR_ID")
-             .help("The id of the sensor")
-             .required(true)
-             .takes_value(true)
-         )
-        .arg(Arg::with_name("val")
-             .long("val")
-             .value_name("BCMPIN")
-             .help("The bcm pin number to read moisture sensor data from")
-             .possible_values(&["4", "5", "6", "13", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27"])
-             .required(true)
-             .takes_value(true)
-         )
-        .arg(Arg::with_name("pwr")
-             .long("pwr")
-             .value_name("BCMPIN")
-             .help("The bcm pin number to provide power to moisture sensor")
-             .possible_values(&["4", "5", "6", "13", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27"])
+        .arg(Arg::with_name("config")
+             .long("config")
+             .value_name("PATH")
+             .help("Path to config file")
              .required(true)
              .takes_value(true)
          )
@@ -89,19 +76,25 @@ fn main() {
         )
         .get_matches();
 
+    let config_path = cmd.value_of("config").expect("Config path is required");
+    let toml_str = std::fs::read_to_string(config_path)
+        .expect(&format!("Error reading file at {}", config_path));
+    let config = sensor_config::from_toml(&toml_str)
+        .expect(&format!("Error parsing configuration at {}", config_path));
+    println!("Using config: {:?}", config);
+
     let gpio_path = cmd.value_of("gpio").unwrap();
-    let sensor_id = cmd.value_of("id").unwrap();
-    let val_pin = u8::from_str_radix(cmd.value_of("val").unwrap(), 10).unwrap();
-    let pwr_pin = u8::from_str_radix(cmd.value_of("pwr").unwrap(), 10).unwrap();
     let sensor_interval = u64::from_str_radix(cmd.value_of("interval").unwrap(), 10).unwrap();
 
     let gp = Arc::new(Mutex::new(gpio::Gpio::new(&gpio_path).unwrap()));
-    let moist = moist_sensor::MoistSensor::new(pwr_pin, val_pin);
-    { moist.init(&mut gp.lock().unwrap()).unwrap() };
+    let (sensor, formatter) = match config.initialize() {
+        Ok(sf) => sf,
+        Err(err) => panic!("Config error {:?}", err)
+    };
+    { sensor.init(&mut gp.lock().unwrap()).unwrap() };
 
-    let moist_formatter = sample_formatter::SampleFormatter::new(sensor_id.to_string(), "soil_moisture".to_string());
-    let sampler = sensor_sampler::SensorSampler::new(moist, gp.clone(), sensor_interval)
-        .map(move |sample| moist_formatter.format(&sample))
+    let sampler = sensor_sampler::SensorSampler::new(sensor, gp.clone(), sensor_interval)
+        .map(move |sample| formatter.format(&sample))
         .map_err(failure::Error::from);
 
     match cmd.subcommand() {
@@ -128,14 +121,14 @@ fn main() {
             }).expect("Error setting SIGINT handler");
             socket_publisher::run(
                 teardown.clone(),
-                socket_cmd.value_of("socket").unwrap(),
+                socket_cmd.value_of("path").unwrap(),
                 sensor_interval,
-                moist.clone(),
+                sensor.clone(),
                 gp.clone()
             ).unwrap();
         }
         (&_, _) => println!("{}", cmd.usage())
     };
 
-    { moist.clear(&mut gp.lock().unwrap()).unwrap() };
+    { sensor.clear(&mut gp.lock().unwrap()).unwrap() };
 }

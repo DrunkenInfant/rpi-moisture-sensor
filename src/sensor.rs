@@ -1,9 +1,8 @@
 use crate::gpio::Gpio;
+use crate::gpio::Error;
 
-pub trait Sensor {
-    type Value;
-    type Error : std::fmt::Debug;
-    fn init(&self, gpio: &mut Gpio) -> Result<(), Self::Error>;
-    fn clear(&self, gpio: &mut Gpio) -> Result<(), Self::Error>;
-    fn read(&self, gpio: &mut Gpio) -> Result<Self::Value, Self::Error>;
+pub trait Sensor: Clone + Copy {
+    fn init(&self, gpio: &mut Gpio) -> Result<(), Error>;
+    fn clear(&self, gpio: &mut Gpio) -> Result<(), Error>;
+    fn read(&self, gpio: &mut Gpio) -> Result<u32, Error>;
 }

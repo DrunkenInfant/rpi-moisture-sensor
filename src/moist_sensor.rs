@@ -9,14 +9,11 @@ pub struct MoistSensor {
 }
 
 impl Sensor for MoistSensor {
-    type Value = u32;
-    type Error = Error;
-
     fn init(&self, gpio: &mut Gpio) -> Result<(), Error> {
         self.init(gpio)
     }
 
-    fn read(&self, gpio: &mut Gpio) -> Result<Self::Value, Self::Error> {
+    fn read(&self, gpio: &mut Gpio) -> Result<u32, Error> {
         self.read(gpio)
     }
 
