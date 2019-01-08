@@ -24,7 +24,8 @@ pub struct SensorConfig {
     pub id: String,
     pub sensor_type: String,
     pub pwr: i64,
-    pub val: i64
+    pub val: i64,
+    pub pwr_wait: i64
 }
 
 #[derive(Debug)]
@@ -71,12 +72,14 @@ impl SensorConfig {
         let sensor_type = get_key_as(conf, "sensor_type", |toml| { toml.as_str() }, parent_key, "string")?;
         let pwr = get_key_as(conf, "pwr_pin", |toml| { toml.as_integer() }, parent_key, "integer")?;
         let val = get_key_as(conf, "val_pin", |toml| { toml.as_integer() }, parent_key, "integer")?;
+        let pwr_wait = get_key_as(conf, "pwr_wait", |toml| { toml.as_integer() }, parent_key, "integer")?;
 
         Ok(SensorConfig {
             id: id.to_string(),
             sensor_type: sensor_type.to_string(),
             pwr: pwr,
-            val: val
+            val: val,
+            pwr_wait
         })
     }
 
@@ -87,7 +90,7 @@ impl SensorConfig {
     }
 
     pub fn initialize(&self) -> Result<(impl Sensor, SampleFormatter), FailureError> {
-        Ok((MoistSensor::new(self.pwr as u8, self.val as u8), SampleFormatter::new(self.id.clone(), self.sensor_type.clone())))
+        Ok((MoistSensor::new(self.pwr as u8, self.val as u8, self.pwr_wait as u64), SampleFormatter::new(self.id.clone(), self.sensor_type.clone())))
     }
 }
 

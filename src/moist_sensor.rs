@@ -5,7 +5,8 @@ use crate::sensor::Sensor;
 #[derive(Clone, Copy)]
 pub struct MoistSensor {
     pwr_pin: u8,
-    val_pin: u8
+    val_pin: u8,
+    pwr_wait: u64
 }
 
 impl Sensor for MoistSensor {
@@ -23,10 +24,11 @@ impl Sensor for MoistSensor {
 }
 
 impl MoistSensor {
-    pub fn new(pwr_pin: u8, val_pin: u8) -> MoistSensor {
+    pub fn new(pwr_pin: u8, val_pin: u8, pwr_wait: u64) -> MoistSensor {
         MoistSensor {
             pwr_pin,
-            val_pin
+            val_pin,
+            pwr_wait
         }
     }
 
@@ -47,7 +49,7 @@ impl MoistSensor {
 
     pub fn read(&self, gpio: &mut Gpio) -> Result<u32, Error> {
         gpio.set(self.pwr_pin)?;
-        std::thread::sleep(Duration::from_millis(2));
+        std::thread::sleep(Duration::from_millis(self.pwr_wait));
         let res = match gpio.read(self.val_pin)? {
             Level::High => 1,
             Level::Low => 0
