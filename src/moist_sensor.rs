@@ -51,8 +51,8 @@ impl MoistSensor {
         gpio.set(self.pwr_pin)?;
         std::thread::sleep(Duration::from_millis(self.pwr_wait));
         let res = match gpio.read(self.val_pin)? {
-            Level::High => 1,
-            Level::Low => 0
+            Level::High => 0,
+            Level::Low => 1
         };
         gpio.clear(self.pwr_pin)?;
         Ok(res)
