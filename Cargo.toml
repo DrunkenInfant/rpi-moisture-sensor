@@ -1,6 +1,6 @@
 [package]
 name = "rpi-moisture-sensor"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Oscar Olsson <osse.olsson@gmail.com>"]
 edition = "2018"
 
