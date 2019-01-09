@@ -1,6 +1,5 @@
 #[macro_use] extern crate serde_json;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
 use clap::{Arg, App, SubCommand};
 use futures::{Future, Stream};
 use tokio::runtime::Runtime;
@@ -12,7 +11,6 @@ pub mod sample_formatter;
 pub mod sensor;
 pub mod sensor_config;
 pub mod sensor_sampler;
-pub mod socket_publisher;
 pub mod rabbitmq_publisher;
 
 use crate::sensor::Sensor;
@@ -43,18 +41,6 @@ fn main() {
              .takes_value(true)
              .default_value("/dev/gpiomem")
          )
-        .subcommand(SubCommand::with_name("socket")
-            .about("Publish sensor values on unix socket")
-            .arg(Arg::with_name("path")
-                 .short("p")
-                 .long("path")
-                 .value_name("PATH")
-                 .help("The path to the created unix socket")
-                 .required(false)
-                 .takes_value(true)
-                 .default_value("./moisture.sock")
-             )
-        )
         .subcommand(SubCommand::with_name("rabbitmq")
             .about("Publish sensor values on rabbitmq")
             .arg(Arg::with_name("host")
@@ -113,20 +99,6 @@ fn main() {
                 )
             ).expect("runtime exited with error");
         },
-        ("socket", Some(socket_cmd)) => {
-            let teardown = Arc::new(AtomicBool::new(false));
-            let signal_teardown = teardown.clone();
-            ctrlc::set_handler(move || {
-                signal_teardown.store(true, Ordering::SeqCst);
-            }).expect("Error setting SIGINT handler");
-            socket_publisher::run(
-                teardown.clone(),
-                socket_cmd.value_of("path").unwrap(),
-                sensor_interval,
-                sensor.clone(),
-                gp.clone()
-            ).unwrap();
-        }
         (&_, _) => println!("{}", cmd.usage())
     };
 
