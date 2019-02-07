@@ -11,9 +11,8 @@ pub mod sample_formatter;
 pub mod sensor;
 pub mod sensor_config;
 pub mod sensor_sampler;
+pub mod sensor_setup;
 pub mod rabbitmq_publisher;
-
-use crate::sensor::Sensor;
 
 fn main() {
     let cmd = App::new("Moist sensor server")
@@ -70,18 +69,12 @@ fn main() {
     println!("Using config: {:?}", config);
 
     let gpio_path = cmd.value_of("gpio").unwrap();
-    let sensor_interval = u64::from_str_radix(cmd.value_of("interval").unwrap(), 10).unwrap();
 
     let gp = Arc::new(Mutex::new(gpio::Gpio::new(&gpio_path).unwrap()));
-    let (sensor, formatter) = match config.initialize() {
+    let sample_streams = match sensor_setup::setup(&config, gp.clone()) {
         Ok(sf) => sf,
         Err(err) => panic!("Config error {:?}", err)
     };
-    { sensor.init(&mut gp.lock().unwrap()).unwrap() };
-
-    let sampler = sensor_sampler::SensorSampler::new(sensor, gp.clone(), sensor_interval)
-        .map(move |sample| formatter.format(&sample))
-        .map_err(failure::Error::from);
 
     match cmd.subcommand() {
         ("rabbitmq", Some(rmq_cmd)) => {
@@ -95,12 +88,13 @@ fn main() {
                     sigf.shared(),
                     rmq_cmd.value_of("host").unwrap(),
                     rmq_cmd.value_of("exchange").unwrap(),
-                    sampler
+                    sample_streams
                 )
             ).expect("runtime exited with error");
         },
         (&_, _) => println!("{}", cmd.usage())
     };
 
-    { sensor.clear(&mut gp.lock().unwrap()).unwrap() };
+    // TODO Bring back teardown
+    //{ sensor.clear(&mut gp.lock().unwrap()).unwrap() };
 }
