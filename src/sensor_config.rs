@@ -1,8 +1,5 @@
 use toml::Value;
 use failure::Error as FailureError;
-use crate::sensor::Sensor;
-use crate::moist_sensor::MoistSensor;
-use crate::sample_formatter::SampleFormatter;
 
 #[derive(Debug)]
 pub struct Error {
@@ -25,12 +22,13 @@ pub struct SensorConfig {
     pub sensor_type: String,
     pub pwr: i64,
     pub val: i64,
-    pub pwr_wait: i64
+    pub pwr_wait: u64,
+    pub interval: u64
 }
 
 #[derive(Debug)]
 pub struct SensorsConfig {
-    sensors: Vec<SensorConfig>
+    pub sensors: Vec<SensorConfig>
 }
 
 pub fn from_toml(toml_str: &str) -> Result<SensorsConfig, FailureError> {
@@ -57,13 +55,6 @@ impl SensorsConfig {
             _ => Err(FailureError::from(Error { key: "sensors".to_string(), cause: "Only one sensor supported.".to_string() }))
         }
     }
-
-    pub fn initialize(&self) -> Result<(impl Sensor, SampleFormatter), FailureError> {
-        match self.sensors.as_slice() {
-            [sensor] => Ok(sensor.initialize()?),
-            _ => Err(FailureError::from(Error { key: "sensors".to_string(), cause: "Only one sensor supported.".to_string() }))
-        }
-    }
 }
 
 impl SensorConfig {
@@ -72,14 +63,16 @@ impl SensorConfig {
         let sensor_type = get_key_as(conf, "sensor_type", |toml| { toml.as_str() }, parent_key, "string")?;
         let pwr = get_key_as(conf, "pwr_pin", |toml| { toml.as_integer() }, parent_key, "integer")?;
         let val = get_key_as(conf, "val_pin", |toml| { toml.as_integer() }, parent_key, "integer")?;
-        let pwr_wait = get_key_as(conf, "pwr_wait", |toml| { toml.as_integer() }, parent_key, "integer")?;
+        let pwr_wait = get_key_as(conf, "pwr_wait", |toml| { toml.as_integer().map(|i| i as u64) }, parent_key, "unsigned integer")?;
+        let interval = get_key_as(conf, "interval", |toml| { toml.as_integer().map(|i| i as u64) }, parent_key, "unsigned integer")?;
 
         Ok(SensorConfig {
             id: id.to_string(),
             sensor_type: sensor_type.to_string(),
             pwr: pwr,
             val: val,
-            pwr_wait
+            pwr_wait,
+            interval
         })
     }
 
@@ -87,10 +80,6 @@ impl SensorConfig {
         validate_pin(self.pwr)?;
         validate_pin(self.val)?;
         Ok(())
-    }
-
-    pub fn initialize(&self) -> Result<(impl Sensor, SampleFormatter), FailureError> {
-        Ok((MoistSensor::new(self.pwr as u8, self.val as u8, self.pwr_wait as u64), SampleFormatter::new(self.id.clone(), self.sensor_type.clone())))
     }
 }
 

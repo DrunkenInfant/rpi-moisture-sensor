@@ -1,12 +1,11 @@
 [package]
 name = "rpi-moisture-sensor"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Oscar Olsson <osse.olsson@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 clap = "^2.31.2"
-ctrlc = "^3.1.1"
 failure = "^0.1"
 futures = "^0.1.25"
 lapin-futures = "0.15.0"

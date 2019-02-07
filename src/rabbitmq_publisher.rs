@@ -7,14 +7,13 @@ use tokio::net::TcpStream;
 use lapin_futures::client::ConnectionOptions;
 use lapin_futures::channel::{BasicPublishOptions, BasicProperties};
 
-pub fn run<F, S>(
+pub fn run<F>(
         teardown: Shared<F>,
         addr: &str,
         exchange: &str,
-        sample_stream: S
+        sample_stream: Box<Stream<Item = Vec<u8>, Error = Error> + Send>
     ) -> Box<Future<Item = (), Error = Error> + Send>
-        where F: Future<Item = Option<i32>, Error = std::io::Error> + Send + 'static,
-              S: Stream<Item = Vec<u8>, Error = Error> + Send + 'static {
+        where F: Future<Item = Option<i32>, Error = std::io::Error> + Send + 'static {
     let exchange = exchange.to_string();
     let teardown = teardown.clone();
 

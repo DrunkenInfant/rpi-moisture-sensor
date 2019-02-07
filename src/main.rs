@@ -1,6 +1,5 @@
 #[macro_use] extern crate serde_json;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
 use clap::{Arg, App, SubCommand};
 use futures::{Future, Stream};
 use tokio::runtime::Runtime;
@@ -12,10 +11,8 @@ pub mod sample_formatter;
 pub mod sensor;
 pub mod sensor_config;
 pub mod sensor_sampler;
-pub mod socket_publisher;
+pub mod sensor_setup;
 pub mod rabbitmq_publisher;
-
-use crate::sensor::Sensor;
 
 fn main() {
     let cmd = App::new("Moist sensor server")
@@ -43,18 +40,6 @@ fn main() {
              .takes_value(true)
              .default_value("/dev/gpiomem")
          )
-        .subcommand(SubCommand::with_name("socket")
-            .about("Publish sensor values on unix socket")
-            .arg(Arg::with_name("path")
-                 .short("p")
-                 .long("path")
-                 .value_name("PATH")
-                 .help("The path to the created unix socket")
-                 .required(false)
-                 .takes_value(true)
-                 .default_value("./moisture.sock")
-             )
-        )
         .subcommand(SubCommand::with_name("rabbitmq")
             .about("Publish sensor values on rabbitmq")
             .arg(Arg::with_name("host")
@@ -84,18 +69,12 @@ fn main() {
     println!("Using config: {:?}", config);
 
     let gpio_path = cmd.value_of("gpio").unwrap();
-    let sensor_interval = u64::from_str_radix(cmd.value_of("interval").unwrap(), 10).unwrap();
 
     let gp = Arc::new(Mutex::new(gpio::Gpio::new(&gpio_path).unwrap()));
-    let (sensor, formatter) = match config.initialize() {
+    let sample_streams = match sensor_setup::setup(&config, gp.clone()) {
         Ok(sf) => sf,
         Err(err) => panic!("Config error {:?}", err)
     };
-    { sensor.init(&mut gp.lock().unwrap()).unwrap() };
-
-    let sampler = sensor_sampler::SensorSampler::new(sensor, gp.clone(), sensor_interval)
-        .map(move |sample| formatter.format(&sample))
-        .map_err(failure::Error::from);
 
     match cmd.subcommand() {
         ("rabbitmq", Some(rmq_cmd)) => {
@@ -109,26 +88,13 @@ fn main() {
                     sigf.shared(),
                     rmq_cmd.value_of("host").unwrap(),
                     rmq_cmd.value_of("exchange").unwrap(),
-                    sampler
+                    sample_streams
                 )
             ).expect("runtime exited with error");
         },
-        ("socket", Some(socket_cmd)) => {
-            let teardown = Arc::new(AtomicBool::new(false));
-            let signal_teardown = teardown.clone();
-            ctrlc::set_handler(move || {
-                signal_teardown.store(true, Ordering::SeqCst);
-            }).expect("Error setting SIGINT handler");
-            socket_publisher::run(
-                teardown.clone(),
-                socket_cmd.value_of("path").unwrap(),
-                sensor_interval,
-                sensor.clone(),
-                gp.clone()
-            ).unwrap();
-        }
         (&_, _) => println!("{}", cmd.usage())
     };
 
-    { sensor.clear(&mut gp.lock().unwrap()).unwrap() };
+    // TODO Bring back teardown
+    //{ sensor.clear(&mut gp.lock().unwrap()).unwrap() };
 }
